@@ -3,6 +3,10 @@
 *checkpoint.ipynb
 .ipynb_checkpoints
 
+# vscode etc
+
+/.vscode/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
