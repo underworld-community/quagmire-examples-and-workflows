@@ -260,7 +260,6 @@ plt.savefig("Flowpath-Wex1-1.png", dpi=250)
 #
 # Most effective seems to be a little local patching followed by some iterations of the swamp fill. Repeat as necessary and check periodically to see what is actually happening.
 
-# +
 for repeat in range(0,2):
 
     mesh.low_points_local_patch_fill(its=3, smoothing_steps=2)
@@ -280,9 +279,6 @@ for repeat in range(0,2):
         print("{} : {}".format(i,low_points3[0]))
         if low_points3[0] == 0:
             break
-
-
-# -
 
 cumulative_flow_3 = mesh.upstream_integral_fn(mesh.topography**2).evaluate(mesh)
 topography_3 = mesh.topography.data[:]
