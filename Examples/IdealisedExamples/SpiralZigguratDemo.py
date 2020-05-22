@@ -43,7 +43,7 @@ y = mesh.tri.y
 bmask = mesh.bmask
 
 # +
-import scipy.interpolate as interpolate
+import stripy
 
 # create height field - make 2 spirals as strings of points and interpolate between them
 # to make a smooth surface for the model. 
@@ -71,11 +71,10 @@ shade = np.hstack( [np.zeros_like(h1), np.ones_like(h2)])
 points = np.transpose(np.array( [x0,y0] ))
 newpoints = np.transpose(np.array([x,y]))
 
-interp = interpolate.LinearNDInterpolator(points, h0)
-height = interp(newpoints)
+interp = stripy.Triangulation(points[:,0], points[:,1])
 
-interp = interpolate.LinearNDInterpolator(points, shade)
-shade  = interp(newpoints)
+height, ierr = interp.interpolate_linear(newpoints[:,0], newpoints[:,1], h0)
+shade, ierr  = interp.interpolate_linear(newpoints[:,0], newpoints[:,1], shade)
 
 height = height + 0.01 * np.random.random(size=height.shape)
 
