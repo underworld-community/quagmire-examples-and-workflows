@@ -13,30 +13,44 @@
 #     name: python3
 # ---
 
+# # Morning Bun Landscape
+#
+# Spherical mesh shaped like a morning bun, inspired from the Spiral Ziggurat demo.
+
+# +
 import numpy as np
 # import matplotlib.pyplot as plt
 from quagmire import QuagMesh 
 from quagmire import tools as meshtools
 from mpi4py import MPI
+
+import lavavu
+import stripy
 comm = MPI.COMM_WORLD
+# -
+
+st0 = stripy.spherical_meshes.icosahedral_mesh(refinement_levels=7, include_face_points=True)
+dm = meshtools.create_spherical_DMPlex(st0.lons, st0.lats, st0.simplices)
 
 # +
-minX, maxX = -5., 5.
-minY, maxY = -5., 5.
-spacing = 0.025
-
-ptsx, ptsy, simplices = meshtools.elliptical_mesh(minX, maxX, minY, maxY, spacing, spacing)
-dm = meshtools.create_DMPlex_from_points(ptsx, ptsy, bmask=None, refinement_levels=0)
-
-# +
-mesh = QuagMesh(dm, downhill_neighbours=3)
+mesh = QuagMesh(dm, downhill_neighbours=2)
 
 #if comm.rank == 0:
 print("Number of nodes in mesh - {}: {}".format(comm.rank, mesh.npoints))
 
 # retrieve local mesh
-x = mesh.tri.x
-y = mesh.tri.y
+x = mesh.tri.x.copy()
+y = mesh.tri.z.copy()
+
+# normalise to range [-5,5]
+x -= x.min()
+x /= x.max()
+x *= 10
+x -= 5
+y -= y.min()
+y /= y.max()
+y *= 10
+y -= 5
 
 # dm generated bmask
 
@@ -76,26 +90,11 @@ interp = stripy.Triangulation(points[:,0], points[:,1])
 height, ierr = interp.interpolate_linear(newpoints[:,0], newpoints[:,1], h0)
 shade, ierr  = interp.interpolate_linear(newpoints[:,0], newpoints[:,1], shade)
 
-height = height + 0.001 * np.random.random(size=height.shape)
+height = height + 0.01 * np.random.random(size=height.shape)
 
 # +
-rank = np.ones_like(height)*comm.rank
-shadow = np.zeros_like(height)
-
-# get shadow zones
-shadow_zones = mesh.lgmap_row.indices < 0
-shadow[shadow_zones] = 1
-shadow_vec = mesh.gvec.duplicate()
-
-mesh.lvec.setArray(shadow)
-mesh.dm.localToGlobal(mesh.lvec, shadow_vec, addv=True)
-
-
-# +
-import lavavu
-import stripy
-
-vertices = np.column_stack([x, y, 3 * height])
+# vertices = np.column_stack([x, y, 3 * height])
+vertices = mesh.tri.points*height.reshape(-1,1)
 tri = mesh.tri
 
 lv = lavavu.Viewer(border=False, background="#FFFFFF", resolution=[600,600], near=-10.0)
@@ -119,28 +118,37 @@ lv.control.ObjectList()
 # tris.control.Checkbox(property="wireframe")
 lv.control.show()
 
+# +
+rank = np.ones_like(height)*comm.rank
+shadow = np.zeros_like(height)
+
+# get shadow zones
+shadow_zones = mesh.lgmap_row.indices < 0
+shadow[shadow_zones] = 1
+shadow_vec = mesh.gvec.duplicate()
+
+mesh.lvec.setArray(shadow)
+mesh.dm.localToGlobal(mesh.lvec, shadow_vec, addv=True)
+
 
 # +
 with mesh.deform_topography():
     mesh.topography.data = height
     
 gradient = mesh.slope.evaluate(mesh)
+# -
 
-# +
-low_points1 = mesh.identify_global_low_points(ref_height=-0.001)
-print("0 : {}".format(low_points1[0]))
-
-for repeat in range(0,1):    
-    mesh.low_points_local_patch_fill(its=1, smoothing_steps=0)
-    low_points2 = mesh.identify_global_low_points(ref_height=-0.001)
-    print("{} : {}".format(repeat,low_points2[0]))
-
+for repeat in range(0,20):
+    
+    mesh.low_points_local_patch_fill(its=2, smoothing_steps=2)
+    low_points2 = mesh.identify_global_low_points(ref_height=0.0)
+    
     if low_points2[0] == 0:
         break
     
-    for i in range(0,20):
+    for i in range(0,2):
  
-        mesh.low_points_swamp_fill(its=5000, saddles=False, ref_height=-0.001, ref_gradient=0.0001)
+        mesh.low_points_swamp_fill(ref_height=0.0, its=5000, saddles=False, ref_gradient=0.0001)
 
         # In parallel, we can't break if ANY processor has work to do (barrier / sync issue)
         low_points3 = mesh.identify_global_low_points(ref_height=0.0)
@@ -148,7 +156,6 @@ for repeat in range(0,1):
         print("{} : {}".format(i,low_points3[0]))
         if low_points3[0] == 0:
             break
-# -
 
 
 outflow_points = mesh.identify_outflow_points()
@@ -178,29 +185,29 @@ cumulative_flow_0.max(), cumulative_flow_1.max()
 import lavavu
 import stripy
 
-vertices = np.column_stack([x, y, 3 * height])
+vertices = mesh.tri.points*height.reshape(-1,1)
 tri = mesh.tri
 
 lv = lavavu.Viewer(border=False, background="#FFFFFF", resolution=[1200,600], near=-10.0)
 
-outs = lv.points("outflows", colour="green", pointsize=10.0, opacity=1.0)
+outs = lv.points("outflows", colour="green", pointsize=5.0, opacity=0.75)
 outs.vertices(vertices[outflow_points])
 
-lows = lv.points("lows", colour="red", pointsize=10.0, opacity=0.75)
+lows = lv.points("lows", colour="red", pointsize=5.0, opacity=0.75)
 lows.vertices(vertices[low_points])
 
-flowball = lv.points("flowballs", pointsize=5.0)
+flowball = lv.points("flowballs", pointsize=2.0)
 flowball.vertices(vertices+(0.0,0.0,0.001))
 flowball.values(cumulative_flow_1, label="flow1")
 flowball.colourmap("rgba(255,255,255,0.0) rgba(128,128,255,0.5) rgba(0,50,200,1.0)")
 
-heightball = lv.points("heightballs", pointsize=5.0, opacity=0.9)
+heightball = lv.points("heightballs", pointsize=2.0, opacity=1.0)
 heightball.vertices(vertices)
 heightball.values(height, label="height")
 heightball.colourmap('dem3')
 
-lv.translation(-1.012, 2.245, -13.352)
-lv.rotation(53.217, 18.104, 161.927)
+# lv.translation(-1.012, 2.245, -13.352)
+# lv.rotation(53.217, 18.104, 161.927)
 
 lv.control.Panel()
 lv.control.ObjectList()
@@ -210,5 +217,3 @@ lv.control.show()
 # -
 
 lv.image(filename="SpiralZiggurat.png", resolution=(1500,750), quality=4)
-
-
