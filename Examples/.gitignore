@@ -1,4 +1,4 @@
-# Ignore generated images etc
+# Ignore generated images etc in the Examples directory
 
 *.png
 *.jpg

@@ -55,8 +55,6 @@ y = sp.tri.points[:,1]
 # -
 
 
-sp.npoints
-
 # ## Semi-circular gutter with incline
 #
 # $$
@@ -98,7 +96,7 @@ height -= dh
 # -
 
 height += 0.05 * y # make a small incline
-height.min()
+height -= height.min()
 
 ones = fn.parameter(1.0, mesh=sp)
 
@@ -109,7 +107,7 @@ with sp.deform_topography():
 # Compute a flow ... 
 
 cumulative_flow_0 = np.log10(1.0e-6 + sp.upstream_integral_fn(ones).evaluate(sp))
-lowpts0 = sp.identify_low_points()
+lowpts0 = sp.identify_low_points(ref_height=-0.01)
 height0 = sp.topography.data.copy()
 
 print("Low points - {}".format(lowpts0))
@@ -118,26 +116,22 @@ print("Low points - {}".format(lowpts0))
 catchments0.data = sp.uphill_propagation(points = lowpts0, values=np.indices((lowpts0.shape)), fill=-1.0, its=1000)
 
 
-catchments0.max()
-
-
+outflows = sp.identify_outflow_points()
 
 # +
-sp.low_points_swamp_fill(its=1000, ref_height=-0.01)
-
+sp.low_points_swamp_fill(its=1000, ref_height=-0.01, saddles=False)
 cumulative_flow_1 = np.log10(1.0e-6 + sp.upstream_integral_fn(ones).evaluate(sp))
-lowpts1 = sp.identify_low_points()
+lowpts1 = sp.identify_low_points(ref_height=-0.01)
 height1 = sp.topography.data.copy()
-print("Low points - {}".format(lowpts1))
-# -
 
+print("{}: Low points - {}".format(lowpts1.shape[0],lowpts1))
+# +
+sp.low_points_swamp_fill(its=1000, ref_height=0.0, saddles=False)
 
-
-sp.low_points_swamp_fill(its=1000, ref_height=-0.01)
 cumulative_flow_2 = np.log10(1.0e-6 + sp.upstream_integral_fn(ones).evaluate(sp))
 lowpts2 = sp.identify_low_points()
 height2 = sp.topography.data.copy()
-print("Low points - {}".format(lowpts2))
+print("{}: Low points - {}".format(lowpts2.shape[0],lowpts2))
 
 # +
 import lavavu
@@ -197,6 +191,9 @@ lownodes.vertices(verts_s1[lowpts1]+(0.0,0.0,0.01))
 
 lownodes0 = lv.points("lows", pointsize=15.0, colour="Red")
 lownodes0.vertices(verts[lowpts0]+(0.0,0.0,0.01))
+
+outflownodes0 = lv.points("outflows", pointsize=15.0, colour="Blue")
+outflownodes0.vertices(verts[outflows]+(0.0,0.0,0.01))
 
 lv.translation(0.348, 0.304, -3.403)
 lv.rotation(-46.218, 0.0, 0.0)
