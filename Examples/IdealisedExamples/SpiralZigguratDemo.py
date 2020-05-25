@@ -23,7 +23,7 @@ comm = MPI.COMM_WORLD
 # +
 minX, maxX = -5., 5.
 minY, maxY = -5., 5.
-spacing = 0.025
+spacing = 0.01
 
 ptsx, ptsy, simplices = meshtools.elliptical_mesh(minX, maxX, minY, maxY, spacing, spacing)
 dm = meshtools.create_DMPlex_from_points(ptsx, ptsy, bmask=None, refinement_levels=0)
@@ -76,7 +76,7 @@ interp = stripy.Triangulation(points[:,0], points[:,1])
 height, ierr = interp.interpolate_linear(newpoints[:,0], newpoints[:,1], h0)
 shade, ierr  = interp.interpolate_linear(newpoints[:,0], newpoints[:,1], shade)
 
-height = height + 0.001 * np.random.random(size=height.shape)
+height = height + (1.0 + 0.01 * np.random.random(size=height.shape))
 
 # +
 rank = np.ones_like(height)*comm.rank
@@ -130,17 +130,17 @@ gradient = mesh.slope.evaluate(mesh)
 low_points1 = mesh.identify_global_low_points(ref_height=-0.001)
 print("0 : {}".format(low_points1[0]))
 
-for repeat in range(0,1):    
-    mesh.low_points_local_patch_fill(its=1, smoothing_steps=0)
+for repeat in range(0,3):    
+    mesh.low_points_local_patch_fill(its=5, smoothing_steps=1)
     low_points2 = mesh.identify_global_low_points(ref_height=-0.001)
-    print("{} : {}".format(repeat,low_points2[0]))
+    print("{} : {}".format(repeat,low_points2[0]), flush=True)
 
     if low_points2[0] == 0:
         break
     
-    for i in range(0,20):
+    for i in range(0,10):
  
-        mesh.low_points_swamp_fill(its=5000, saddles=False, ref_height=-0.001, ref_gradient=0.0001)
+        mesh.low_points_swamp_fill(its=5000, ref_height=-0.001, ref_gradient=0.000001)
 
         # In parallel, we can't break if ANY processor has work to do (barrier / sync issue)
         low_points3 = mesh.identify_global_low_points(ref_height=0.0)
@@ -183,18 +183,18 @@ tri = mesh.tri
 
 lv = lavavu.Viewer(border=False, background="#FFFFFF", resolution=[1200,600], near=-10.0)
 
-outs = lv.points("outflows", colour="green", pointsize=10.0, opacity=1.0)
+outs = lv.points("outflows", colour="green", pointsize=5.0, opacity=1.0)
 outs.vertices(vertices[outflow_points])
 
-lows = lv.points("lows", colour="red", pointsize=10.0, opacity=0.75)
+lows = lv.points("lows", colour="red", pointsize=5.0, opacity=0.75)
 lows.vertices(vertices[low_points])
 
-flowball = lv.points("flowballs", pointsize=5.0)
+flowball = lv.points("flowballs", pointsize=4.0)
 flowball.vertices(vertices+(0.0,0.0,0.001))
 flowball.values(cumulative_flow_1, label="flow1")
 flowball.colourmap("rgba(255,255,255,0.0) rgba(128,128,255,0.5) rgba(0,50,200,1.0)")
 
-heightball = lv.points("heightballs", pointsize=5.0, opacity=0.9)
+heightball = lv.points("heightballs", pointsize=3.0, opacity=0.9)
 heightball.vertices(vertices)
 heightball.values(height, label="height")
 heightball.colourmap('dem3')
@@ -210,5 +210,7 @@ lv.control.show()
 # -
 
 lv.image(filename="SpiralZiggurat.png", resolution=(1500,750), quality=4)
+
+
 
 
