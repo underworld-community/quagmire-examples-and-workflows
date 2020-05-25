@@ -15,20 +15,10 @@ If you are running in a jupytext ennvironment, then this file can be opened as a
 
 ```sh
 
-cd Tutorial
-jupytext --set-formats "../../Notebooks/Tutorial//ipynb,py:light" *.py
-cd .. 
-
-cd WorkedExamples
-jupytext --set-formats "../../Notebooks/WorkedExamples//ipynb,py:light" *.py
-cd ..
-
-cd IdealisedExamples
-jupytext --set-formats "../../Notebooks/IdealisedExamples//ipynb,py:light" *.py
-cd ..
-
-cd LandscapeEvolution
-jupytext --set-formats "../../Notebooks/LandscapeEvolution//ipynb,py:light" *.py
+jupytext --set-formats "Notebooks/Tutorial//ipynb,Examples/Tutorial//py:light" Examples/Tutorial/*.py
+jupytext --set-formats "Notebooks/WorkedExamples//ipynb,Examples/WorkedExamples//py:light" Examples/WorkedExamples*.py
+jupytext --set-formats "Notebooks/IdealisedExamples//ipynb,Examples/IdealisedExamples//py:light" Examples/IdealisedExamples*.py
+jupytext --set-formats "Notebooks/LandscapeEvolution//ipynb,Examples/LandscapeEvolution//py:light" Examples/LandscapeEvolution*.py
 ```
 
 ```python
