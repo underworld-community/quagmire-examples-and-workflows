@@ -29,7 +29,7 @@ import stripy
 comm = MPI.COMM_WORLD
 # -
 
-st0 = stripy.spherical_meshes.icosahedral_mesh(refinement_levels=5, include_face_points=True)
+st0 = stripy.spherical_meshes.icosahedral_mesh(refinement_levels=7, include_face_points=True)
 dm = meshtools.create_spherical_DMPlex(st0.lons, st0.lats, st0.simplices)
 
 # +
@@ -63,7 +63,7 @@ import stripy
 # to make a smooth surface for the model. 
 
 #  
-theta = np.linspace(0.0000001, 66.6*np.pi, 10000)
+theta = np.linspace(0.0000001, 100*np.pi, 20000)
 s1 = 0.30 * theta 
 s2 = 0.25 * theta 
 x1 = s1 * np.cos(theta)
@@ -90,10 +90,10 @@ interp = stripy.Triangulation(points[:,0], points[:,1])
 height, ierr = interp.interpolate_linear(newpoints[:,0], newpoints[:,1], h0)
 shade, ierr  = interp.interpolate_linear(newpoints[:,0], newpoints[:,1], shade)
 
-height = 5.0 + height + 0.01 * np.random.random(size=height.shape)
+height = 5.0 + 0.1 * height + 0.001 * np.random.random(size=height.shape)
 # -
 
-height.min()
+height.min(), height.max()
 
 # +
 # vertices = np.column_stack([x, y, 3 * height])
@@ -139,23 +139,25 @@ with mesh.deform_topography():
     mesh.topography.data = height
     
 gradient = mesh.slope.evaluate(mesh)
-
-# +
-    
-mesh.low_points_local_patch_fill(its=2, smoothing_steps=0)
-low_points2 = mesh.identify_global_low_points(ref_height=0.0)
-
-for i in range(0,20):
-
-    mesh.low_points_swamp_fill(ref_height=0.0, its=5000, saddles=False, ref_gradient=0.0001)
-
-    # In parallel, we can't break if ANY processor has work to do (barrier / sync issue)
-    low_points3 = mesh.identify_global_low_points(ref_height=0.0)
-
-    print("{} : {}".format(i,low_points3[0]))
-    if low_points3[0] <= 1:
-        break
 # -
+
+for repeat in range(0,3): 
+    
+    mesh.low_points_local_patch_fill(its=3, smoothing_steps=3)
+    low_points2 = mesh.identify_global_low_points(ref_height=5.0)
+    if low_points2[0] <= 1:
+        break
+
+    for i in range(0,5):
+
+        mesh.low_points_swamp_fill(ref_height=5.0, its=5000, saddles=False, ref_gradient=0.000001)
+
+        # In parallel, we can't break if ANY processor has work to do (barrier / sync issue)
+        low_points3 = mesh.identify_global_low_points(ref_height=5.0)
+
+        print("{} : {}".format(i,low_points3[0]))
+        if low_points3[0] <= 1:
+            break
 
 
 outflow_points = mesh.identify_outflow_points()
@@ -168,15 +170,12 @@ ones = fn.parameter(1.0, mesh=mesh)
 rain = fn.misc.levelset(mesh.topography, alpha=0.99)
 
 cumulative_flow_0 = np.log10(1.0e-10 + mesh.upstream_integral_fn(ones).evaluate(mesh))
-# -
-
-
 
 
 # +
 ## Smoothing is purely for the purpose of visualisation
 
-rbf_smoother = mesh.build_rbf_smoother(0.015)
+rbf_smoother = mesh.build_rbf_smoother(0.005)
 smoothed_flow = rbf_smoother.smooth_fn(mesh.upstream_integral_fn(ones))
 cumulative_flow_1 = np.log10(1.0e-10 + smoothed_flow.evaluate(mesh))
 # -
@@ -191,7 +190,7 @@ import stripy
 vertices = mesh.tri.points*height.reshape(-1,1)
 tri = mesh.tri
 
-lv = lavavu.Viewer(border=False, background="#FFFFFF", resolution=[1200,600], near=-10.0)
+lv = lavavu.Viewer(border=False, axis=False, background="#FFFFFF", resolution=[1200,600], near=-10.0)
 
 outs = lv.points("outflows", colour="green", pointsize=5.0, opacity=0.75)
 outs.vertices(vertices[outflow_points])
@@ -199,8 +198,8 @@ outs.vertices(vertices[outflow_points])
 lows = lv.points("lows", colour="red", pointsize=5.0, opacity=0.75)
 lows.vertices(vertices[low_points])
 
-flowball = lv.points("flowballs", pointsize=5.0)
-flowball.vertices(vertices+(0.0,0.0,0.001))
+flowball = lv.points("flowballs", pointsize=2.0)
+flowball.vertices(vertices*1.01)
 flowball.values(cumulative_flow_1, label="flow1")
 flowball.colourmap("rgba(255,255,255,0.0) rgba(128,128,255,0.5) rgba(0,50,200,1.0)")
 
@@ -219,6 +218,6 @@ lv.control.show()
 
 # -
 
-lv.image(filename="MorningBun.png", resolution=(1500,750), quality=4)
+lv.image(filename="MorningBun.png", resolution=(2000,1000), quality=4)
 
 
