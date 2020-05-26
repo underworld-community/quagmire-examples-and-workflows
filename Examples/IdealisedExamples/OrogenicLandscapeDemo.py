@@ -1,16 +1,16 @@
 # ---
 # jupyter:
 #   jupytext:
-#     formats: ../../Notebooks/IdealisedExamples//ipynb,py:light
+#     formats: Notebooks/IdealisedExamples//ipynb,Examples/IdealisedExamples//py:light
 #     text_representation:
 #       extension: .py
 #       format_name: light
 #       format_version: '1.5'
 #       jupytext_version: 1.4.2
 #   kernelspec:
-#     display_name: quagmire
+#     display_name: Python 3
 #     language: python
-#     name: quagmire
+#     name: python3
 # ---
 
 # # Orogenic Landscape Modelling
