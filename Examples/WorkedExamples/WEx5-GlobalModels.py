@@ -94,7 +94,7 @@ tris.vertices(vertices)
 tris.indices(tri.simplices)
 tris.values(mesh_height, label="elevation")
 #tris.values(shade, label="shade")
-tris.colourmap('dem3', range=(6.3625,6.38))
+tris.colourmap('geo', range=(6.36,6.375))
 cb = tris.colourbar()
 
 # sm = lv.points("submarine", colour="blue", pointsize=0.5, opacity=0.75)
@@ -106,6 +106,8 @@ lv.control.ObjectList()
 lv.control.show()
 # -
 
-mesh.npoints
+height.max(), height.min()
+
+lv.defaultcolourmaps()
 
 
