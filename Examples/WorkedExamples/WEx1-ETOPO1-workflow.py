@@ -22,14 +22,14 @@
 # 3. Save the mesh to HDF5 file
 
 # +
+import quagmire
+from quagmire.tools import meshtools
 from osgeo import gdal
 
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
 # %matplotlib inline
-
-import quagmire
 
 from scipy.ndimage.filters import gaussian_filter
 
