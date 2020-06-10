@@ -1,7 +1,7 @@
 # ---
 # jupyter:
 #   jupytext:
-#     formats: ../../Notebooks/WorkedExamples//ipynb,py:light
+#     formats: Notebooks/WorkedExamples//ipynb,Examples/WorkedExamples//py:light
 #     text_representation:
 #       extension: .py
 #       format_name: light

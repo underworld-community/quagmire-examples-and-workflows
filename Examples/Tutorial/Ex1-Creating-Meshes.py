@@ -1,10 +1,7 @@
-#!/usr/bin/env python
-# coding: utf-8
 # ---
 # jupyter:
 #   jupytext:
-#     cell_metadata_filter: -all
-#     formats: ../../Notebooks/Tutorial//ipynb,py:light
+#     formats: Notebooks/Tutorial//ipynb,Examples/Tutorial//py:light
 #     text_representation:
 #       extension: .py
 #       format_name: light
@@ -45,13 +42,15 @@
 # - [Spherical meshes](#Spherical-meshes)
 # - [Save mesh to file](#Save-mesh-to-file)
 
+# + pycharm={"is_executing": false}
 from quagmire.tools import meshtools
 from quagmire import QuagMesh
 import numpy as np
+# -
 
 # ## Structured grids
 
-# +
+# + pycharm={"is_executing": false}
 minX, maxX = -5.0, 5.0
 minY, maxY = -5.0, 5.0
 
@@ -72,7 +71,9 @@ print(type(DM))
 #
 # We hand this to `QuagMesh` to generate the necessary data structures for gradient operations, smoothing, neighbour allocation, etc.
 
+# + pycharm={"is_executing": false}
 mesh = QuagMesh(DM)
+# -
 
 # We attach data to a mesh solely through mesh variables (see [Example notebook](Ex1a-QuagmireMeshVariables.ipynb) for details)
 #
@@ -87,7 +88,7 @@ mesh = QuagMesh(DM)
 # in cases like this where there is no way for information to be out
 # of sync between domains. 
 
-# +
+# + pycharm={"is_executing": false}
 mesh_variable = mesh.add_variable(name="data1")
 mesh_variable.data = np.sin(mesh.coords[:,0] * np.pi)
 mesh_variable.sync()
@@ -96,8 +97,7 @@ mesh_variable2 = mesh.add_variable(name="data2")
 mesh_variable2.data = np.sin(mesh.coords[:,0] * np.pi) * np.cos(mesh.coords[:,1] * np.pi) 
 mesh_variable2.sync()
 
-
-# +
+# + pycharm={"is_executing": false}
 import lavavu
 
 lv = lavavu.Viewer(border=False, background="#FFFFFF", resolution=[500,500], near=-10.0)
@@ -158,7 +158,7 @@ lv.control.show()
 # 2. Mark boundary edges
 # 3. Distribute `DMPlex` to other processors
 # 4. Refine the mesh
-#
+
 # ## Elliptical mesh
 
 # +
@@ -169,7 +169,6 @@ x, y, simplices = meshtools.elliptical_mesh(minX, maxX, minY, maxY, spacingX, sp
 DM = meshtools.create_DMPlex(x, y, simplices)
 
 mesh = QuagMesh(DM)
-# -
 
 
 mesh_equant = mesh.neighbour_cloud_distances.mean(axis=1) / ( np.sqrt(mesh.area))
@@ -266,7 +265,7 @@ lv.show()
 
 
 import matplotlib.pyplot as plt
-get_ipython().run_line_magic('matplotlib', 'inline')
+# %matplotlib inline
 
 
 fig, (ax1, ax2) = plt.subplots(1,2, figsize=(10,4))
@@ -277,13 +276,7 @@ ax2.hist(mesh1_equant, density=True)
 ax1.set_title('original mesh')
 ax2.set_title('improved mesh')
 
-plt.show()## Mesh refinement
-
-Triangulating a large set of points on a single processor then distributing the mesh across multiple processors can be very slow. A more time effective workflow is to create an initial `DM` with a small number of points, then refine the mesh in parallel. This is achieved by adding the midpoint of each line segment to the mesh and can be iteratively refined until the desired level of detail is reached.
-
-```python
-refine_DM(dm, refinement_levels=1)
-```
+plt.show()
 # -
 
 # ## Mesh refinement
@@ -310,7 +303,6 @@ DM_r2 = meshtools.refine_DM(DM, refinement_levels=2)
 mesh0 = QuagMesh(DM, verbose=False)
 mesh1 = QuagMesh(DM_r1, verbose=False)
 mesh2 = QuagMesh(DM_r2, verbose=False)
-# -
 
 
 v = DM_r1.getCoordinates()
