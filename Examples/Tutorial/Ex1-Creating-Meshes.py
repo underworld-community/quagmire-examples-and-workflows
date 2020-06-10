@@ -1,12 +1,15 @@
+#!/usr/bin/env python
+# coding: utf-8
 # ---
 # jupyter:
 #   jupytext:
+#     cell_metadata_filter: -all
 #     formats: ../../Notebooks/Tutorial//ipynb,py:light
 #     text_representation:
 #       extension: .py
 #       format_name: light
 #       format_version: '1.5'
-#       jupytext_version: 1.4.2
+#       jupytext_version: 1.5.0
 #   kernelspec:
 #     display_name: Python 3
 #     language: python
@@ -19,8 +22,9 @@
 #
 # - `PixMesh`: meshing on a rectangular grid
 # - `TriMesh`: meshing on unstructured triangular points
+# - `sTriMesh`: meshing on unstructured triangular points on the sphere
 #
-# All meshes are generated and handed to Quagmire using a `DM` object where the selection of `PixMesh` or `TriMesh` is identified automatically by `QuagMesh`. The following data structures are built:
+# All meshes are generated and handed to Quagmire using a `DM` object where the selection of `PixMesh`, `TriMesh`, or `sTriMesh` is identified automatically by `QuagMesh`. The following data structures are built:
 #
 # - Delaunay triangulation
 # - node neighbour array
@@ -38,19 +42,16 @@
 # - [Elliptical mesh](#Elliptical-mesh)
 # - [Mesh improvement](#Mesh-improvement)
 # - [Mesh refinement](#Mesh-refinement)
+# - [Spherical meshes](#Spherical-meshes)
 # - [Save mesh to file](#Save-mesh-to-file)
 
-# + pycharm={"is_executing": false}
 from quagmire.tools import meshtools
 from quagmire import QuagMesh
-
-# + pycharm={"is_executing": false}
-import numpy as np 
-# -
+import numpy as np
 
 # ## Structured grids
 
-# + pycharm={"is_executing": false}
+# +
 minX, maxX = -5.0, 5.0
 minY, maxY = -5.0, 5.0
 
@@ -71,9 +72,7 @@ print(type(DM))
 #
 # We hand this to `QuagMesh` to generate the necessary data structures for gradient operations, smoothing, neighbour allocation, etc.
 
-# + pycharm={"is_executing": false}
 mesh = QuagMesh(DM)
-# -
 
 # We attach data to a mesh solely through mesh variables (see [Example notebook](Ex1a-QuagmireMeshVariables.ipynb) for details)
 #
@@ -88,7 +87,7 @@ mesh = QuagMesh(DM)
 # in cases like this where there is no way for information to be out
 # of sync between domains. 
 
-# + pycharm={"is_executing": false}
+# +
 mesh_variable = mesh.add_variable(name="data1")
 mesh_variable.data = np.sin(mesh.coords[:,0] * np.pi)
 mesh_variable.sync()
@@ -97,7 +96,8 @@ mesh_variable2 = mesh.add_variable(name="data2")
 mesh_variable2.data = np.sin(mesh.coords[:,0] * np.pi) * np.cos(mesh.coords[:,1] * np.pi) 
 mesh_variable2.sync()
 
-# + pycharm={"is_executing": false}
+
+# +
 import lavavu
 
 lv = lavavu.Viewer(border=False, background="#FFFFFF", resolution=[500,500], near=-10.0)
@@ -136,7 +136,7 @@ lv.control.show()
 # and handed to `DMPlex` using:
 #
 # ```python
-# DM = meshtools.create_DMPlex(x, y, simplices, boundary_vertices=None)
+# DM = meshtools.create_DMPlex(x, y, simplices, boundary_vertices=None, refinement_levels=0)
 # ```
 #
 # ---
@@ -144,7 +144,7 @@ lv.control.show()
 # Alternatively, an arbitrary set of points (without duplicates) can be triangulated and processed as a `DMPlex` object using:
 #
 # ```python
-# meshtools.create_DMPlex_from_points(x, y, bmask=None)
+# meshtools.create_DMPlex_from_points(x, y, bmask=None, refinement_levels=0)
 # ```
 #
 # If no boundary information is provided, the boundary is assumed to be the convex hull of points.
@@ -158,10 +158,10 @@ lv.control.show()
 # 2. Mark boundary edges
 # 3. Distribute `DMPlex` to other processors
 # 4. Refine the mesh
-
+#
 # ## Elliptical mesh
 
-# + pycharm={"is_executing": false}
+# +
 spacingX = 0.1
 spacingY = 0.1
 
@@ -169,11 +169,13 @@ x, y, simplices = meshtools.elliptical_mesh(minX, maxX, minY, maxY, spacingX, sp
 DM = meshtools.create_DMPlex(x, y, simplices)
 
 mesh = QuagMesh(DM)
+# -
 
-# + pycharm={"is_executing": false}
+
 mesh_equant = mesh.neighbour_cloud_distances.mean(axis=1) / ( np.sqrt(mesh.area))
 
-# + pycharm={"is_executing": false}
+
+# +
 import lavavu
 
 lv = lavavu.Viewer(border=False, background="#FFFFFF", resolution=[1000,600], near=-10.0)
@@ -213,18 +215,20 @@ lv.show()
 #
 # Applies Lloyd's algorithm of iterated voronoi construction to improve the mesh point locations. This distributes the points to a more uniform spacing with more equant triangles. It can be very slow for anything but a small mesh. [Refining](#Mesh-refinement) the mesh a few times will produce a large, well-spaced mesh.
 
-# + pycharm={"is_executing": false}
+# +
 bmask = mesh.bmask.copy()
 
 x1, y1 = meshtools.lloyd_mesh_improvement(x, y, bmask, iterations=3)
 DM = meshtools.create_DMPlex_from_points(x1, y1, bmask)
 
 mesh1 = QuagMesh(DM)
+# -
 
-# + pycharm={"is_executing": false}
+
 mesh1_equant = mesh1.neighbour_cloud_distances.mean(axis=1) / ( np.sqrt(mesh1.area))
 
-# + pycharm={"is_executing": false}
+
+# +
 import lavavu
 
 lv = lavavu.Viewer(border=False, background="#FFFFFF", resolution=[1000,600], near=-10.0)
@@ -256,12 +260,13 @@ lv.control.show()
 
 lv.show()
 
-# + pycharm={"is_executing": false}
+
+# +
 # Comparison of point-wise area for original and improved mesh
 
 
 import matplotlib.pyplot as plt
-# %matplotlib inline
+get_ipython().run_line_magic('matplotlib', 'inline')
 
 
 fig, (ax1, ax2) = plt.subplots(1,2, figsize=(10,4))
@@ -272,7 +277,13 @@ ax2.hist(mesh1_equant, density=True)
 ax1.set_title('original mesh')
 ax2.set_title('improved mesh')
 
-plt.show()
+plt.show()## Mesh refinement
+
+Triangulating a large set of points on a single processor then distributing the mesh across multiple processors can be very slow. A more time effective workflow is to create an initial `DM` with a small number of points, then refine the mesh in parallel. This is achieved by adding the midpoint of each line segment to the mesh and can be iteratively refined until the desired level of detail is reached.
+
+```python
+refine_DM(dm, refinement_levels=1)
+```
 # -
 
 # ## Mesh refinement
@@ -283,7 +294,7 @@ plt.show()
 # refine_DM(dm, refinement_levels=1)
 # ```
 
-# + pycharm={"is_executing": false}
+# +
 spacingX = 0.5
 spacingY = 0.5
 
@@ -299,27 +310,22 @@ DM_r2 = meshtools.refine_DM(DM, refinement_levels=2)
 mesh0 = QuagMesh(DM, verbose=False)
 mesh1 = QuagMesh(DM_r1, verbose=False)
 mesh2 = QuagMesh(DM_r2, verbose=False)
+# -
 
-# + pycharm={"is_executing": false}
+
 v = DM_r1.getCoordinates()
 v.array.shape
 
 
-# + pycharm={"is_executing": false}
-def plot_points(lv, points, label, **kwargs):
-    vertices = np.zeros((points.shape[0],3))
-    vertices[:,0:2] = points
-    
+# +
+def plot_points(lv, points, label, **kwargs):    
     lv_pts = lv.points(label, **kwargs)
-    lv_pts.vertices(vertices)
+    lv_pts.vertices(points)
     return lv_pts
 
 def plot_triangles(lv, points, triangles, label, **kwargs):
-    vertices = np.zeros((points.shape[0],3))
-    vertices[:,0:2] = points
-
     lv_tri = lv.triangles(label, **kwargs)
-    lv_tri.vertices(vertices)
+    lv_tri.vertices(points)
     lv_tri.indices(triangles)
     return lv_tri
 
@@ -354,7 +360,7 @@ lv.show()
 # mesh.set_label("my_label", indices)
 # ```
 
-# + pycharm={"is_executing": false}
+# +
 coarse_pts0 = mesh0.get_label("coarse")
 coarse_pts1 = mesh1.get_label("coarse")
 coarse_pts2 = mesh2.get_label("coarse")
@@ -370,13 +376,54 @@ print("{} boundary points".format( len(mesh2.get_label("boundary")) ))
 set(coarse_pts0) == set(coarse_pts1) == set(coarse_pts2)
 # -
 
+# ## Spherical meshes
+#
+# This unstructed mesh uses PETSc's `DMPlex` object, and uses [stripy](https://github.com/underworldcode/stripy) to triangulate on the unit sphere. Multiple meshes may be created, including:
+#
+# ```python
+# DM = meshtools.create_spherical_DMPlex(lons, lats, simplices, boundary_vertices=None)
+# DM = meshtools.create_DMPlex_from_spherical_points(lons, lats, simplices, bmask=None, refinement_levels=0)
+# ```
+#
+# If no boundary information is provided, the boundary is calculated from any line segments that do not share a triangle with another.a
+
+# +
+lons, lats, bmask = meshtools.generate_elliptical_points(-40, 40, -80, 80, 0.1, 0.1, 1500, 200)
+
+DM = meshtools.create_DMPlex_from_spherical_points(lons, lats, bmask, refinement_levels=0)
+DM_r1 = meshtools.create_DMPlex_from_spherical_points(lons, lats, bmask, refinement_levels=1)
+DM_r2 = meshtools.create_DMPlex_from_spherical_points(lons, lats, bmask, refinement_levels=2)
+
+mesh0 = QuagMesh(DM)
+mesh1 = QuagMesh(DM_r1)
+mesh2 = QuagMesh(DM_r2)
+
+
+# +
+lv = lavavu.Viewer(border=False, background="#FFFFFF", resolution=[1000,600], near=-10.0)
+
+bnodes0 = plot_points(lv, mesh0.data[~mesh0.bmask], "boundary_points_r0", colour="red", pointsize=10)
+bnodes1 = plot_points(lv, mesh1.data[~mesh1.bmask], "boundary_points_r1", colour="blue", pointsize=10)
+bnodes2 = plot_points(lv, mesh2.data[~mesh2.bmask], "boundary_points_r2", colour="#336611", pointsize=10)
+
+tri0 = plot_triangles(lv, mesh0.data, mesh0.tri.simplices, "mesh_r0", wireframe=True, linewidth=1.5, colour="red")
+tri1 = plot_triangles(lv, mesh1.data, mesh1.tri.simplices, "mesh_r1", wireframe=True, linewidth=1.0, colour="blue")
+tri2 = plot_triangles(lv, mesh2.data, mesh2.tri.simplices, "mesh_r2", wireframe=True, linewidth=1.0, colour="#336611")
+
+lv.control.Panel()
+lv.control.ObjectList()
+lv.control.show()
+
+lv.show()
+# -
+
 # ## Save mesh to file
 #
 # A mesh can be saved and imported later. The `QuagMesh` object has the `save_mesh_to_hdf5` method for this, as does `meshtools`.
 #
 # **Note:** Requires PETSc 3.8 or higher
 
-# + pycharm={"is_executing": false}
+# +
 filename = "refined_mesh.h5"
 
 # save from QuagMesh object:
