@@ -30,10 +30,10 @@ comm = MPI.COMM_WORLD
 # -
 
 st0 = stripy.spherical_meshes.icosahedral_mesh(refinement_levels=7, include_face_points=True)
-dm = meshtools.create_spherical_DMPlex(st0.lons, st0.lats, st0.simplices)
+dm = meshtools.create_spherical_DMPlex(np.degrees(st0.lons), np.degrees(st0.lats), st0.simplices)
 
 # +
-mesh = QuagMesh(dm, downhill_neighbours=2)
+mesh = QuagMesh(dm, r1=1., r2=1., downhill_neighbours=2)
 
 #if comm.rank == 0:
 print("Number of nodes in mesh - {}: {}".format(comm.rank, mesh.npoints))
@@ -91,9 +91,6 @@ height, ierr = interp.interpolate_linear(newpoints[:,0], newpoints[:,1], h0)
 shade, ierr  = interp.interpolate_linear(newpoints[:,0], newpoints[:,1], shade)
 
 height = 5.0 + 0.1 * height + 0.001 * np.random.random(size=height.shape)
-# -
-
-height.min(), height.max()
 
 # +
 # vertices = np.column_stack([x, y, 3 * height])
