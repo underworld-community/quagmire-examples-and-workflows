@@ -58,22 +58,6 @@ ds = gdal.Open(file)
 ds.GetProjection()
 
 # +
-import osr
-
-inSpatialRef = osr.SpatialReference()
-inSpatialRef.ImportFromEPSG(4283) # GDA94
-
-# output SpatialReference
-outSpatialRef = osr.SpatialReference()
-outSpatialRef.ImportFromEPSG(28355) # GDA94 MGA zone 55
-
-transform = osr.CoordinateTransformation(inSpatialRef, outSpatialRef)
-
-transformed_points = transform.TransformPoints(np.c_[x.flat, y.flat])
-transformed_points = np.vstack(transformed_points)
-eastings, northings = transformed_points[:,0], transformed_points[:,1]
-
-# +
 from scipy.ndimage.filters import gaussian_filter
 
 point_mask =  height > -0.5
@@ -84,17 +68,17 @@ point_mask[0,-1] = 1.0
 point_mask[-1,0] = 1.0
 point_mask[-1,-1] = 1.0
 
-xs = eastings[point_mask.ravel()]
-ys = northings[point_mask.ravel()]
-heights = height[point_mask]  ## in km 
+xs = x[point_mask]
+ys = y[point_mask]
+heights = height[point_mask]
 points = np.column_stack([xs, ys])
 
-submarine = (heights.ravel() <  10 )
-subaerial = (heights.ravel() >= 10 )
+submarine = (heights <  10 )
+subaerial = (heights >= 10 )
 # -
 
 
-DM = meshtools.create_DMPlex_from_points(xs, ys, bmask=subaerial)
+DM = meshtools.create_DMPlex_from_spherical_points(xs, ys, bmask=subaerial)
 mesh = quagmire.QuagMesh(DM, downhill_neighbours=2)
 
 with mesh.deform_topography():
@@ -152,10 +136,10 @@ ax.add_feature(rivers   , edgecolor="black", facecolor="none", linewidth=1, zord
 # ax.scatter(xs[submarine],ys[submarine], color="#000044", s=.1)
 
 plt.imshow(flows1, extent=map_extent, transform=ccrs.PlateCarree(),
-           cmap='Blues', origin='upper', )
+           cmap='Blues', origin='upper')
 
-ax.scatter(xs[outflow_points1], ys[outflow_points1], color="Green", s=5, transform=ccrs.epsg(28355))
-ax.scatter(xs[low_points1], ys[low_points1], color="Red", s=5, transform=ccrs.epsg(28355))
+ax.scatter(xs[outflow_points1], ys[outflow_points1], color="Green", s=5)
+ax.scatter(xs[low_points1], ys[low_points1], color="Red", s=5)
 
 
 plt.savefig("WEx4-Flowpath-1.png", dpi=250)
@@ -219,11 +203,11 @@ ax.add_feature(coastline,     edgecolor="black", facecolor="none", linewidth=1, 
 ax.add_feature(lakes,     edgecolor="black", facecolor="none", linewidth=1, zorder=3)
 ax.add_feature(rivers   , edgecolor="black", facecolor="none", linewidth=1, zorder=3)
 
-ax.scatter(xs[outflow_points3],ys[outflow_points3], color="#00FF44", s=.5, zorder=2, transform=ccrs.epsg(28355))
-ax.scatter(xs[low_points3],ys[low_points3], color="#00FF44", s=.5, zorder=3, transform=ccrs.epsg(28355))
+ax.scatter(xs[outflow_points3],ys[outflow_points3], color="#00FF44", s=.5, zorder=2)
+ax.scatter(xs[low_points3],ys[low_points3], color="#00FF44", s=.5, zorder=3)
 
 plt.imshow(flows3, extent=map_extent, transform=ccrs.PlateCarree(),
-           cmap='Blues', origin='upper', zorder=1)
+           cmap='Blues', origin='upper', vmin=-3.5, vmax=-1.5, zorder=1)
 
 
 # +
@@ -289,11 +273,11 @@ ax.add_feature(rivers   , edgecolor="Yellow", facecolor="none", linewidth=1, zor
 for i in range(0,15):
     ax.scatter(xs[catch[i]], ys[catch[i]], s=20, alpha=0.5)
 
-ax.scatter(xs[outflow_points3], ys[outflow_points3], color="Green", s=1.0, transform=ccrs.epsg(28355))
-ax.scatter(xs[low_points3],     ys[low_points3], color="Red", s=25.0, transform=ccrs.epsg(28355))
+ax.scatter(xs[outflow_points3], ys[outflow_points3], color="Green", s=1.0)
+ax.scatter(xs[low_points3],     ys[low_points3], color="Red", s=25.0)
 
 plt.imshow(flows3, extent=map_extent, transform=ccrs.PlateCarree(),
-           cmap='Blues', origin='upper', alpha=0.5, zorder=10)
+           cmap='Blues', origin='upper', vmin=-3.5, vmax=-2.5, alpha=0.5, zorder=10)
 
 plt.savefig("WEx4-15Catchments.png", dpi=250)
 
@@ -311,7 +295,7 @@ ax.add_feature(coastline, edgecolor="black", linewidth=1, zorder=30)
 #     ax.scatter(xs[catch[i]], ys[catch[i]], s=20, alpha=0.5)
 
 plt.imshow(flows3, extent=map_extent, transform=ccrs.PlateCarree(),
-           cmap='Greys', origin='upper',  alpha=1.0, zorder=10)
+           cmap='Greys', origin='upper', vmin=-3.0, vmax=-2.5, alpha=1.0, zorder=10)
 
 plt.savefig("WEx4-RiversBW.png", dpi=500)
 
@@ -323,7 +307,7 @@ ax.set_extent(map_extent)
 ax.add_feature(coastline, edgecolor="black", linewidth=1, zorder=30)
 
 for i in range(0,100):
-    ax.scatter(xs[catch[i]], ys[catch[i]], s=0.05, alpha=0.5, transform=ccrs.epsg(28355))
+    ax.scatter(xs[catch[i]], ys[catch[i]], s=0.05, alpha=0.5)
 
 # plt.imshow(flows3, extent=map_extent, transform=ccrs.PlateCarree(),
 #            cmap='Blues', origin='upper', vmin=-3.5, vmax=-2.5, alpha=1.0, zorder=10)
@@ -338,7 +322,7 @@ catch_norm = matplotlib.colors.Normalize(vmin=0.0, vmax=5.0)
 logflow = np.log10(1.0e-3+upstream_area3)
 flows_img = logflow.min() * np.ones_like(height)
 flows_img[point_mask] = logflow
-flows_norm = matplotlib.colors.Normalize(vmin=-3.0, vmax=10)
+flows_norm = matplotlib.colors.Normalize(vmin=-3.0, vmax=-2.5)
 # -
 
 logflow.max()
@@ -351,7 +335,7 @@ im[..., 0:3][~point_mask] = (0.8,0.9,1.0)
 
 import lavavu
 
-points = np.column_stack([mesh.tri.points, 0.05*mesh.topography.data])
+points = mesh.data
 
 low_point_coords3 = points[low_points3]
 outflow_point_coords3 = points[outflow_points3]

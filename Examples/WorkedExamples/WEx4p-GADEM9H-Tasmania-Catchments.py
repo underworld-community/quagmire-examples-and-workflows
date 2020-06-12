@@ -74,31 +74,41 @@ transformed_points = np.vstack(transformed_points)
 eastings, northings = transformed_points[:,0], transformed_points[:,1]
 
 # +
+xmin, xmax = eastings.min(), eastings.max()
+ymin, ymax = northings.min(), northings.max()
+
+xcoords = np.linspace(xmin, xmax, x.shape[1])
+ycoords = np.linspace(ymin, ymax, y.shape[0])
+
+
+import stripy
+cmsh = stripy.Triangulation(eastings, northings, permute=True)
+cmsh.update_tension_factors(height.ravel())
+height_proj = cmsh.interpolate_to_grid(xcoords, ycoords, height.ravel())
+
+# +
 from scipy.ndimage.filters import gaussian_filter
 
-point_mask =  height > -0.5
-
-#corners
-point_mask[0,0] = 1.0
-point_mask[0,-1] = 1.0
-point_mask[-1,0] = 1.0
-point_mask[-1,-1] = 1.0
-
-xs = eastings[point_mask.ravel()]
-ys = northings[point_mask.ravel()]
-heights = height[point_mask]  ## in km 
-points = np.column_stack([xs, ys])
-
-submarine = (heights.ravel() <  10 )
-subaerial = (heights.ravel() >= 10 )
-# -
+point_mask =  height_proj > -0.5
+submarine = (height_proj <  10 )
+subaerial = (height_proj >= 10 )
 
 
-DM = meshtools.create_DMPlex_from_points(xs, ys, bmask=subaerial)
+# +
+DM = meshtools.create_DMDA(xmin, xmax, ymin, ymax, x.shape[1], y.shape[0])
 mesh = quagmire.QuagMesh(DM, downhill_neighbours=2)
 
+mesh.bmask = subaerial.ravel()
+mesh.mask.unlock()
+mesh.mask.data = mesh.bmask.astype(np.float)
+mesh.mask.lock()
+# -
+
 with mesh.deform_topography():
-    mesh.topography.data = heights                                                                 
+    mesh.topography.data = height_proj                                                                 
+
+xs = mesh.coords[:,0]
+ys = mesh.coords[:,1]
 
 # +
 low_points1 = mesh.identify_low_points()
@@ -138,7 +148,7 @@ map_extent = ( left, right, bottom, top)
 
 logflow = np.log10(1.0e-3+upstream_area1)
 flows1 = logflow.min() * np.ones_like(height)
-flows1[point_mask] = logflow
+flows1.flat = logflow
 
 plt.figure(figsize=(15, 10))
 ax = plt.subplot(111, projection=ccrs.PlateCarree())
@@ -152,7 +162,9 @@ ax.add_feature(rivers   , edgecolor="black", facecolor="none", linewidth=1, zord
 # ax.scatter(xs[submarine],ys[submarine], color="#000044", s=.1)
 
 plt.imshow(flows1, extent=map_extent, transform=ccrs.PlateCarree(),
-           cmap='Blues', origin='upper', )
+           cmap='Blues', origin='lower', vmin=-3.5, vmax=-1.5)
+
+
 
 ax.scatter(xs[outflow_points1], ys[outflow_points1], color="Green", s=5, transform=ccrs.epsg(28355))
 ax.scatter(xs[low_points1], ys[low_points1], color="Red", s=5, transform=ccrs.epsg(28355))
@@ -208,7 +220,7 @@ outflow_points3 = np.unique(np.hstack(( mesh.identify_outflow_points(), mesh.ide
 # +
 logflow = np.log10(1.0e-3+upstream_area3)
 flows3 = logflow.min() * np.ones_like(height)
-flows3[point_mask] = logflow
+flows3.flat = logflow
 
 plt.figure(figsize=(15, 10))
 ax = plt.subplot(111, projection=ccrs.PlateCarree())
@@ -223,7 +235,7 @@ ax.scatter(xs[outflow_points3],ys[outflow_points3], color="#00FF44", s=.5, zorde
 ax.scatter(xs[low_points3],ys[low_points3], color="#00FF44", s=.5, zorder=3, transform=ccrs.epsg(28355))
 
 plt.imshow(flows3, extent=map_extent, transform=ccrs.PlateCarree(),
-           cmap='Blues', origin='upper', zorder=1)
+           cmap='Blues', origin='lower', zorder=1)
 
 
 # +
@@ -241,10 +253,6 @@ with mesh1.deform_topography():
 
 topomask = mesh1.add_variable("topomask")
 topomask.data = np.where(mesh1.topography.data > 1, 1.0, 0.0)
-
-# large triangles associated with boundaries need to be excluded (choose by inspection)
-area_threshold = np.percentile(mesh1.area, 95)
-topomask.data = np.where(mesh1.area < area_threshold, topomask.data, 0.0)
 
 area = mesh1.upstream_integral_fn(topomask).evaluate(mesh1)
 
@@ -287,13 +295,13 @@ ax.add_feature(lakes,     edgecolor="black", facecolor="none", linewidth=1, zord
 ax.add_feature(rivers   , edgecolor="Yellow", facecolor="none", linewidth=1, zorder=3)
 
 for i in range(0,15):
-    ax.scatter(xs[catch[i]], ys[catch[i]], s=20, alpha=0.5)
+    ax.scatter(xs[catch[i]], ys[catch[i]], s=20, alpha=0.5, transform=ccrs.epsg(28355))
 
 ax.scatter(xs[outflow_points3], ys[outflow_points3], color="Green", s=1.0, transform=ccrs.epsg(28355))
 ax.scatter(xs[low_points3],     ys[low_points3], color="Red", s=25.0, transform=ccrs.epsg(28355))
 
 plt.imshow(flows3, extent=map_extent, transform=ccrs.PlateCarree(),
-           cmap='Blues', origin='upper', alpha=0.5, zorder=10)
+           cmap='Blues', origin='lower',  alpha=0.5, zorder=10)
 
 plt.savefig("WEx4-15Catchments.png", dpi=250)
 
@@ -311,7 +319,7 @@ ax.add_feature(coastline, edgecolor="black", linewidth=1, zorder=30)
 #     ax.scatter(xs[catch[i]], ys[catch[i]], s=20, alpha=0.5)
 
 plt.imshow(flows3, extent=map_extent, transform=ccrs.PlateCarree(),
-           cmap='Greys', origin='upper',  alpha=1.0, zorder=10)
+           cmap='Greys', origin='lower', alpha=1.0, zorder=10)
 
 plt.savefig("WEx4-RiversBW.png", dpi=500)
 
@@ -332,13 +340,13 @@ plt.savefig("WEx4-100Catchments-only.png", dpi=500)
 
 # +
 catch_img = np.zeros_like(height)
-catch_img[point_mask] = catchments.data
+catch_img.flat = catchments.data
 catch_norm = matplotlib.colors.Normalize(vmin=0.0, vmax=5.0)
 
 logflow = np.log10(1.0e-3+upstream_area3)
 flows_img = logflow.min() * np.ones_like(height)
-flows_img[point_mask] = logflow
-flows_norm = matplotlib.colors.Normalize(vmin=-3.0, vmax=10)
+flows_img.flat = logflow
+flows_norm = matplotlib.colors.Normalize(vmin=-3.0, vmax=-2.5)
 # -
 
 logflow.max()
@@ -351,7 +359,7 @@ im[..., 0:3][~point_mask] = (0.8,0.9,1.0)
 
 import lavavu
 
-points = np.column_stack([mesh.tri.points, 0.05*mesh.topography.data])
+points = np.column_stack([mesh.data, 0.05*mesh.topography.data])
 
 low_point_coords3 = points[low_points3]
 outflow_point_coords3 = points[outflow_points3]
@@ -360,10 +368,9 @@ low_point_coords1 = points[low_points1]
 
 lv = lavavu.Viewer(border=False, background=(0.8,0.9,1.0), resolution=[1200,600], near=-10.0, axis=False)
 
-tri1 = lv.triangles("triangles", wireframe=False)
-tri1.vertices(points)
-tri1.indices(mesh.tri.simplices)
-tri1.texture(im)
+lvmesh = lv.quads(dims=(mesh.nx, mesh.ny), wireframe=True)
+lvmesh.vertices(points)
+lvmesh.texture(im)
 
 lv.control.Panel()
 lv.control.ObjectList()
