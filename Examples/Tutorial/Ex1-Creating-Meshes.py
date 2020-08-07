@@ -6,7 +6,7 @@
 #       extension: .py
 #       format_name: light
 #       format_version: '1.5'
-#       jupytext_version: 1.5.0
+#       jupytext_version: 1.4.2
 #   kernelspec:
 #     display_name: Python 3
 #     language: python
@@ -416,7 +416,7 @@ lv.show()
 # **Note:** Requires PETSc 3.8 or higher
 
 # +
-filename = "refined_mesh.h5"
+filename = "Ex1-refined_mesh.h5"
 
 # save from QuagMesh object:
 # mesh2.save_mesh_to_hdf5(filename)
@@ -429,5 +429,8 @@ DM_r2 = meshtools.create_DMPlex_from_hdf5(filename)
 
 mesh2 = QuagMesh(DM_r2)
 # -
+
+print(mesh2.npoints)
+print(mesh2.area)
 
 # The next example is [Ex2-Topography-Meshes](./Ex2-Topography-Meshes.ipynb)

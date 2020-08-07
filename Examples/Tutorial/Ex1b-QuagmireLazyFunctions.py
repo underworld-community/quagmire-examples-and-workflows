@@ -53,9 +53,11 @@ minX, maxX = -5.0, 5.0
 minY, maxY = -5.0, 5.0,
 dx, dy = 0.02, 0.02
 
-x,y, bound = meshtools.generate_elliptical_points(minX, maxX, minY, maxY, dx, dy, 60000, 300)
-DM = meshtools.create_DMPlex_from_points(x, y, bmask=bound)
-mesh = QuagMesh(DM, downhill_neighbours=1)
+from stripy.cartesian_meshes import elliptical_base_mesh_points
+epointsx, epointsy, ebmask = elliptical_base_mesh_points(10.0, 7.5, 0.25, remove_artifacts=True)
+dm = meshtools.create_DMPlex_from_points(epointsx, epointsy, bmask=ebmask, refinement_levels=1)
+
+mesh = QuagMesh(dm, downhill_neighbours=1)
 # -
 
 # ### Basic usage
@@ -108,9 +110,10 @@ print((fn.math.sin(A)**2.0 + fn.math.cos(A)**2.0))
 #
 # Let us first define a mesh variable ... 
 
-height = mesh.add_variable(name="h(X,Y)")
+height = mesh.add_variable(name="h(X,Y)", lname="h")
 height.data = np.ones(mesh.npoints)
 print(height)
+display(height)
 
 # We might introduce a universal scaling for the height variable. This could be useful if, say, the offset is something that we might want to change programmatically within a timestepping loop. 
 
@@ -118,8 +121,10 @@ print(height)
 h_scale = fn.parameter(2.0)
 h_offset = fn.parameter(1.0)
 
-scaled_height = height * h_scale + h_offset
-print(scaled_height.description)
+scaled_height = h_scale * height + h_offset
+
+display(scaled_height)
+
 print(height.evaluate(mesh))
 print(scaled_height.evaluate(mesh))
 
@@ -131,10 +136,11 @@ print(scaled_height.evaluate(mesh))
 
 rainfall_exponent = fn.parameter(2.2)
 rainfall = scaled_height**rainfall_exponent
-print(rainfall)
+fn.display(rainfall)
 print(rainfall.evaluate(mesh))
 
-# The rainfall definition is live to any changes in the height but we can also adjust the rainfall parameters on the fly ... 
+# The rainfall definition is live to any changes in the height but we can also adjust the rainfall parameters on the fly.
+# This allows us to define operators with coefficients that can be supplied as mutable parameters.
 
 # +
 height.data = np.sin(mesh.coords[:,0])
@@ -149,11 +155,15 @@ print("Rainfall Fn evaluation:",rainfall.evaluate(mesh))
 print("Rainfall Direct       :",(height.data*2.0+10.0)**2.2)
 # -
 
-# While functions are most useful because they are not computed once and for all, it is also possible to compute their values and assign to a variable. Just be aware that, at this point, numpy has  a greater richness of operators than `quagmire.function`. We can rewrite the above assignment to the height variable using the `coord` function that extracts values of the x or y ( 0 or 1 ) coordinate direction from the locations given as arguments to `evaluate`.
+# While functions are most useful because they are not computed once and for all, it is also possible to compute their values and assign to a variable. Just be aware that, at this point, numpy has  a greater richness of operators than `quagmire.function`. We can rewrite the above assignment to the height variable using the `coord` function that extracts values of the x or y ( 0 or 1 ) coordinate direction from the locations given as arguments to `evaluate`. Note that the rainfall function always used the updated height values.
 
-height.data = fn.math.sin(fn.misc.coord(0)).evaluate(mesh)
+# +
+height.data = fn.math.cos(fn.misc.coord(0)).evaluate(mesh)
 print("Height:  ", height.data)
-print("Height = ", fn.math.sin(fn.misc.coord(0)).description)
+print("Height = ", fn.math.cos(fn.misc.coord(0)).description)
+
+rainfall.evaluate(mesh)
+# -
 
 # ### Operator overloading for +, - , *, **, /
 #
@@ -167,11 +177,15 @@ print("Height = ", fn.math.sin(fn.misc.coord(0)).description)
 
 # +
 dhdx, dhdy = fn.math.grad(height)
-slope = (dhdx**2 + dhdy**2)**0.5
+slope = fn.math.sqrt((dhdx**2 + dhdy**2))
 a = fn.parameter(1.3)
 k = slope**a
 
+display(dhdx)
+display(dhdy)
+display(k)
 print(k)
+
 print(k.evaluate(mesh))
 # -
 
@@ -182,9 +196,9 @@ print(k.evaluate(mesh))
 #
 # _Note: there is no symbolic differentiation in the functions module._
 
-dhdx = height.fn_gradient[0]
+dhdx = height.fn_gradient(0)
 print(dhdx.description)
-dh1dy = scaled_height.fn_gradient[1]
+dh1dy = scaled_height.fn_gradient(1)
 print(dh1dy.description)
 
 # Gradients are also accessible through the `grad`, `div` and `curl` operators as follows
@@ -197,7 +211,7 @@ print("Curl.Grad(h) = ", curl_grad_h.description)
 
 # The following should all evaluate to zero everywhere and so act as a test on the accuracy of the gradient operator 
 
-print("dhdX (error) = ", (gradx-fn.math.cos(fn.misc.coord(0))).evaluate(mesh))
+print("dhdX (error) = ", (gradx+fn.math.sin(fn.misc.coord(0))).evaluate(mesh))
 print("dhdY (error) = ",  grady.evaluate(mesh))
 print("Curl.Grad(h) (error) = ", curl_grad_h.evaluate(mesh))
 
@@ -228,24 +242,32 @@ tris.control.List(options=["height", "slope", "curlgrad", "dh/dy"], property="co
 lv.control.show()
 # -
 
-# ### Level set functions for conditional behaviour
+# ### Functions for conditional behaviour
 #
-# We provide `quagmire.function.misc.levelset` to produce simple mask functions that can be used to create conditionals. 
+# We provide `quagmire.function.misc.where` to produce simple mask functions that can be used to create conditionals. 
+# This is how to pick out a flat area in the mesh:
 #
 # ```python
-# flat_area_mask = fn.misc.levelset(mesh.slope, 0.01, invert=False)
+# flat_area_mask = fn.misc.where(mesh.slope-0.01, fn.parameter(1.0), fn.parameter(0.0)
 # ```
 #
 # The mesh has a mesh.mask variable that is used to identify boundary points. Others could be added (by you) to identify regions such as internal drainages that require special treatment or exclusion from some equations. The levelset function can be applied to a mask to ensure that interpolation does not produce anomalies. It could also be used to clip out a value in a field between certain ranges (e.g. to capture regions in a specific height interval or with a specific catchment identifier). 
 #
 
-flat_area_mask = fn.misc.levelset(slope, 0.1, invert=False)
-steep_area_mask = fn.misc.levelset(slope, 0.9, invert=True)
+masked_height = fn.misc.where(fn.misc.coord(1), height, 0.0)
+masked_height.display()
+masked_height.derivative(1)
+print(masked_height)
+
+flat_area_mask  = fn.misc.where(0.1-slope, 1.0, 0.0 )
+steep_area_mask = fn.misc.where(slope-0.9, 1.0, 0.0 )
+flat_area_mask.display()
+steep_area_mask.display()
 
 # +
 import lavavu
 
-xyz     = np.column_stack([mesh.tri.points, height.data])
+xyz     = np.column_stack([mesh.tri.points, masked_height.evaluate(mesh)])
 
 lv = lavavu.Viewer(border=False, background="#FFFFFF", resolution=[1000,600], near=-10.0)
 
@@ -268,7 +290,9 @@ tris.control.Checkbox(property="wireframe")
 tris.control.List(options=["height", "steep", "flat"], property="colourby", value="flat", command="redraw", label="Display:")
 lv.control.show()
 # -
+# Note how the derivative of the 'level set' functions works. We assume that the derivative of the 
+# masking function is zero everywhere so that the mask simply applies to the derivative of the masked 
+# function:
 
 
-
-
+masked_height.derivative(1)

@@ -41,7 +41,12 @@ mesh = QuagMesh(DM, downhill_neighbours=1)
 # ### Basic usage
 #
 # Mesh variables can be instantiated directly or by adding a new variable to an existing mesh. 
+# `print` will display and expanded description of the variable.
 #
+# Note, for use in jupyter notebooks (etc), you can add a latex description (see below)and it
+# will be displayed "nicely". The coordinates are added automatically because many things depend
+# on the geometrical context (spherical v. flat). Note that the use of rstrings (`r"\LaTeX"`) to make sure the 
+# names are not corrupted due to unexpected special characters. 
 
 # +
 phi = mesh.add_variable(name="PHI(X,Y)")
@@ -51,6 +56,25 @@ psi = mesh.add_variable(name="PSI(X,Y)")
 
 phi1 = MeshVariable(name="PSI(X,Y)", mesh=mesh)
 psi1 = MeshVariable(name="PHI(X,Y)", mesh=mesh)
+
+print(psi)
+
+# +
+## latex / jupyter additions:
+
+phi = mesh.add_variable(name="PHI(X,Y)", lname=r"\phi")
+psi = mesh.add_variable(name="PHI(X,Y)", lname=r"\psi")
+
+print("Printed version:")
+print(phi)
+print("\n")
+print("Displayed version (latex)")
+phi.display()
+print("\n")
+
+# Or just display the object using jupyter
+print("Automatically displayed version (latex in notebook, printed in python)")
+phi
 # -
 
 # Mesh variables store their data in a PETSc distributed vector with values on the local mesh accessible through a numpy interface (via to petsc4py). For consistency with `underworld`, the numpy array is accessed as the `data` property on the variable as follows
@@ -142,23 +166,84 @@ print(phi.evaluate(phi._mesh))
 ## interpolation at a point 
 
 print(phi.interpolate(0.01,1.0))
-print(phi.evaluate(0.01, 1.0))
+print(phi.evaluate((0.01, 1.0)))
 # -
 
 
+# ## Derivatives / gradients
+#
 # Mesh based variables can be differentiated in (X,Y). There is a `gradient` method that supplies the coefficients of the derivative surface at the nodal points (these may then need to be interpolated). A more general interface is also provided in the form of a function which can be evaluated (as above):
 #
 
 # +
-dpsidx_nodes, dpsidy_nodes = psi.gradient()
-print(dpsidx_nodes)
-print(dpsidy_nodes)
+dpsi = psi.gradient()
+dpsidx_nodes = dpsi[:,0]
+dpsidy_nodes = dpsi[:,1]
+print("dPSIdx - N: ",  dpsidx_nodes)
+print("dPSIdy - N: ",  dpsidy_nodes)
 
-dpsidx_fn = psi.fn_gradient[0] # (0) for X derivative, (1) for Y
-print(dpsidx_fn.evaluate(mesh))
-print(dpsidx_fn.evaluate(0.01, 1.0))
+dpsidx_fn = psi.fn_gradient(0)# (0) for X derivative, (1) for Y
+print("dPSIdx - F: ",  dpsidx_fn.evaluate(mesh))
+print("dPSIdx - point evaluation ",  dpsidx_fn.evaluate((0.01, 1.0)))
+# -
 
-dpsidx_fn
+# ## Higher derivatives
+#
+# The easiest way to form higher derivatives for a mesh variable is to use the nesting properties of the gradient functions. 
+# These form gradients and use the same mesh to find *their* gradients. However, the do so in a way that does not require
+# defining and handling intermediary mesh variables. 
+#
+# Let's take a look to see how these methods work:
+
+# +
+## This way uses the underlying mesh structure to extract gradients and store the result
+
+dpsidx_var = mesh.add_variable("dpsidx")
+dpsidx_var.data = dpsidx_nodes
+dpsidy_var = mesh.add_variable("dpsidy")
+dpsidy_var.data = dpsidy_nodes
+
+
+print( dpsidx_var.gradient()[:,0] )
+
+
+## And this way is function based (two equivalent interfaces)
+
+d2psidx2_fn  = dpsidx_fn.fn_gradient(0)
+d2psidx2_fn2 = dpsidx_fn.derivative(0)
+
+print( d2psidx2_fn.evaluate(mesh))
+print( d2psidx2_fn2.evaluate(mesh))
+
+# -
+
+# The function based method is more simple and has some advantages if the data in the original variable change - the gradient function 
+# handles those updates automatically. Note how the mesh variable version does not update whereas the function based version does. We will see
+# in the next example notebook how the function system works in detail. For now, though, simply note that the function is not evaluated
+# until it is needed and so can be defined in an abstract manner independent of the data in the variable.
+
+# +
+## change the data in the PSI variable:
+
+psi.data = 2.0 * np.cos(mesh.coords[:,0])**2.0 * np.sin(mesh.coords[:,1])**2.0 
+
+print( dpsidx_var.gradient()[:,0] )
+print(  0.5 * d2psidx2_fn.evaluate(mesh) )
+print( (0.5 * d2psidx2_fn).evaluate(mesh))
+# -
+
+# This is how we can define a Laplacian of the variable (in Cartesian geometry) using the function interface. This approach allows
+# the operator to be a self-updating variable that can be passed around as though it was a simple mesh variable. Note that the
+# functions have some helpful associated descriptive text that explains what they are. 
+#
+# Also note, this is not a generic operator as it is specific to this variable but more general operators can be constructed 
+# with very little overhead because the interface is very lightweight.
+
+# +
+laplace_phi = phi.derivative(0).derivative(0) + phi.derivative(1).derivative(1)
+print(laplace_phi)
+
+print(laplace_phi.evaluate(mesh))
 # -
 
 # ### Visualisation
@@ -192,5 +277,56 @@ tris.control.Checkbox(property="wireframe")
 tris.control.List(options = ["phi", "psi", "dpsidx_nodes"], property="colourby", value="psi", command="redraw", label="Display:")
 lv.control.show()
 # -
+# ## Saving and loading mesh variables
+#
+# There are 2 equivalent ways to save a mesh (PETSc DM) to a file. The first is to call `meshtools.save_DM_to_hdf5` and the second is to call the mesh object's own method `mesh.save_mesh_to_hdf5(filename)`. Mesh variables have a similar save method
+#
+
+
+mesh.save_mesh_to_hdf5("Ex1a-circular_mesh.h5")
+phi.save("Ex1a-circular_mesh_phi.h5")
+psi.save("Ex1a-circular_mesh_psi.h5")
+
+# We can then use these files to:
+#   - Build a new copy of the mesh
+#   - Add new mesh variables to that mesh
+#   - read the values back in
+#
+#
+
+# +
+DM2 = meshtools.create_DMPlex_from_hdf5("Ex1a-circular_mesh.h5")
+mesh2 = QuagMesh(DM2)
+
+phi2 = mesh2.add_variable(name="PHI(X,Y)")
+psi2 = mesh2.add_variable(name="PSI(X,Y)")
+
+
+phi2.load("Ex1a-circular_mesh_phi.h5")
+psi2.load("Ex1a-circular_mesh_psi.h5")
+# -
+
+# ### Mesh variable save / load and names
+#
+# The names that are stored in the mesh variable hdf5 file are needed to retrieve the information again. That means the mesh variable that is loaded needs to match the one that was saved *Exactly*. This will not work:
+#
+# ``` python
+# psi3 = mesh2.add_variable(name="PSI")
+# psi3.load("Ex1a-circular_mesh_psi.h5")
+# ```
+#
+# but, as long as you know the name of the original MeshVariable, you can do this:
+#
+#
+# ``` python
+# psi3.load("Ex1a-circular_mesh_psi.h5", name="PSI(X,Y)")
+# ```
+#
+
+psi3 = mesh2.add_variable(name="PSI")
+psi3.load("Ex1a-circular_mesh_psi.h5", name="PSI(X,Y)")
+psi3.data
+
+print(phi.data[0], psi.data[0])
 
 
