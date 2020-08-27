@@ -44,6 +44,8 @@ from quagmire.mesh import MeshVariable
 from quagmire import function as fn
 import numpy as np
 
+
+
 # ### Working mesh
 #
 # First we create a basic mesh so that we can define mesh variables and obbtain gradients etc.
@@ -58,6 +60,7 @@ epointsx, epointsy, ebmask = elliptical_base_mesh_points(10.0, 7.5, 0.25, remove
 dm = meshtools.create_DMPlex_from_points(epointsx, epointsy, bmask=ebmask, refinement_levels=1)
 
 mesh = QuagMesh(dm, downhill_neighbours=1)
+
 # -
 
 # ### Basic usage
@@ -90,7 +93,12 @@ print((fn.math.sin(A)**2.0 + fn.math.cos(A)**2.0).evaluate(0.0,0.0))
 
 # ### Descriptions
 #
-# The lazy function carries a description string that tells you approximately what will happen when the function is evaluated. For example
+# The lazy function carries a description string that tells you approximately what will happen when the function is evaluated.
+# There is also a `.math()` method that gives a $\LaTeX$ string which displays nicely in a jupyter notebook. The `quagmire.function.display` 
+# function tries to make this notebook display easy for a variety of cases.
+#
+# Examples:
+#
 
 # +
 print(A.description)
@@ -101,12 +109,40 @@ print((fn.math.sin(A)**2.0 + fn.math.cos(A)**2.0).description)
 
 print((fn.math.sin(A)**2.0 + fn.math.cos(A)**2.0))
 
+## the latex version is accessed like this:
 
+fn.display(fn.math.sin(A)+fn.math.cos(B))
+fn.display(fn.math.sin(A)**2.0 + fn.math.cos(A)**2.0)
+
+
+# -
+
+# ### Predefined Mesh Functions
+#
+# There are some predefined mesh functions that we can use in building more complicated functions that depend 
+# on the mesh geometry. The details are described in the Ex1c-QuagmireCoordinateGeometry.py notebook.
+#
+# The `mesh.coordinates.xi0/1` functions are symbols representing the coordinate directions and can be evaluated
+# to extract the relevant mesh directions. That means we can do this:
+#
+
+# +
+X = mesh.coordinates.xi0
+Y = mesh.coordinates.xi1
+
+display(fn.math.sin(X))
+print(X.evaluate(mesh))
+
+S = fn.math.sin(X+Y) - fn.math.cos(X*Y)
+display(S)
+print(S.evaluate(mesh))
+
+X.evaluate(mesh)
 # -
 
 # ### Mesh Variables as functions
 #
-# Mesh variables (`MeshVariables`) are also members of the `LazyEvaluation` class. They can be evaluated exactly as the paramters can, but it is also possible to obtain derivatives. Of course, they also have other properties beyond those of simple functions (see the MeshVariables examples in the XXXXX notebook for details).
+# Mesh variables (`MeshVariables`) are also members of the `LazyEvaluation` class. They can be evaluated exactly as the parameters can, but it is also possible to obtain numerical derivatives. Of course, they also have other properties beyond those of simple functions (see the MeshVariables examples in the previous (Ex1a-QuagmireMeshVariables.py) notebook for details).
 #
 # Let us first define a mesh variable ... 
 
@@ -114,6 +150,7 @@ height = mesh.add_variable(name="h(X,Y)", lname="h")
 height.data = np.ones(mesh.npoints)
 print(height)
 display(height)
+height.math()
 
 # We might introduce a universal scaling for the height variable. This could be useful if, say, the offset is something that we might want to change programmatically within a timestepping loop. 
 
@@ -131,6 +168,8 @@ print(scaled_height.evaluate(mesh))
 h_offset.value = 10.0
 print(scaled_height.evaluate(mesh))
 # -
+
+height * h_scale
 
 # We might wish to define a rainfall parameter that is a function of height that can be passed in to some existing code. The use of functions is perfect for this. 
 
@@ -169,24 +208,28 @@ rainfall.evaluate(mesh)
 #
 # We define addition / subtraction (negation), multiplication, division, and raising to arbitrary power for mesh variables and parameters and the meaning is carried over from `numpy` - i.e. generally these are element-by-element operations on the underlying data vector and require the data structures to have compatible sizes.
 #
-# It is common to compute a power law of the magnitude of the local slope. 
 #
-# $$
-#  k = \left| \nabla h \right|^a
-# $$
 
 # +
-dhdx, dhdy = fn.math.grad(height)
+dhdx, dhdy = mesh.geometry.grad(height)
 slope = fn.math.sqrt((dhdx**2 + dhdy**2))
+
+native_slope = mesh.geometry.slope(height)  # This actually just returns the height.slope function
+
 a = fn.parameter(1.3)
 k = slope**a
+k2 = native_slope ** a
 
-display(dhdx)
-display(dhdy)
+display(slope)
+display(native_slope)
+
 display(k)
-print(k)
+display(k2)
+
+## Numerical equivalence
 
 print(k.evaluate(mesh))
+print(k2.evaluate(mesh))
 # -
 
 
@@ -194,26 +237,83 @@ print(k.evaluate(mesh))
 #
 # Variables associated with a mesh also have the capacity to form spatial derivatives anywhere. This is provided by the `stripy` gradient routines in the case of triangulations. The gradient can be formed from any lazy function by evaluating it at the mesh points and then obtaining values of derivatives anywhere via stripy. In the case of the spatially invariant `parameter` objects, the derivatives are identically zero.
 #
-# _Note: there is no symbolic differentiation in the functions module._
 
-dhdx = height.fn_gradient(0)
-print(dhdx.description)
-dh1dy = scaled_height.fn_gradient(1)
-print(dh1dy.description)
+gradx = height.fn_gradient(0)
+display(gradx)
+grady = scaled_height.fn_gradient(1)
+display(grady)
 
-# Gradients are also accessible through the `grad`, `div` and `curl` operators as follows
+#
+# **Example:** It is a common operation to compute a power law of the magnitude of the local slope. In Cartesian geometry, the slope is defined this way
+#
+# $$
+#     \left| \nabla h \right| \equiv \sqrt{  \frac{\partial h}{\partial x}^2 + \frac{\partial h}{\partial y}^2  }
+# $$ 
+#
+# On the sphere, this expression is a little more complicated and this is why the expression is written in terms of components of the gradient operator in the `display` below
+#
+# $$
+#  k = \left| \nabla h \right|^a
+# $$
+#
+# Mesh variables have an optimised numerical shortcut for calculating slopes.
+#
+# **NOTE:** The gradient operators are dependent upon the coordinate system itself. 
+# This is ususally inherited from a mesh but it can be defined independently of the mesh.
 
-gradx, grady = fn.math.grad(height)
-div_grad_h = fn.math.div(gradx, grady)
-curl_grad_h = fn.math.curl(gradx, grady)
-print("Div.Grad(h)  = ", div_grad_h.description)
-print("Curl.Grad(h) = ", curl_grad_h.description)
+# +
+dhdx, dhdy = mesh.geometry.grad(height)
+slope = fn.math.sqrt((dhdx**2 + dhdy**2))
 
+native_slope = mesh.geometry.slope(height)  # This actually just returns the height.slope function
+
+a = fn.parameter(1.3)
+k = slope**a
+k2 = native_slope ** a
+
+display(slope)
+display(native_slope)
+
+display(k)
+display(k2)
+
+## Numerical equivalence
+
+print(k.evaluate(mesh))
+print(k2.evaluate(mesh))
+# -
+
+# ## Vector functions
+#
+# The gradient operator above returns a tuple of quagmire functions that can be thought of as a vector field. 
+# They are a special form of tuple object that understands some of the operations that can be applied to functions.
+#
+# **Note**: The vector is a tuple (hence immutable) because we consider the components of the vector should not be changed
+# independently and that it is better to build a new vector instead. We may relax this when we implement vector mesh variables. 
+#
+
+# +
+V = fn.vector_field(1/Y, 1/X)
+V.display()
+V.div(expand=False).display()
+V.div(expand=True).display()
+(V * fn.math.sin(X)).div(expand=True)
+
+# We 
+try:
+    V[1] = 0
+except TypeError:
+    print("TypeError: 'vector_field' object does not support item assignment")
+    
+# -
+
+# ### Numerical accuracy
+#
 # The following should all evaluate to zero everywhere and so act as a test on the accuracy of the gradient operator 
 
-print("dhdX (error) = ", (gradx+fn.math.sin(fn.misc.coord(0))).evaluate(mesh))
-print("dhdY (error) = ",  grady.evaluate(mesh))
-print("Curl.Grad(h) (error) = ", curl_grad_h.evaluate(mesh))
+print("dhdX (error) = ", (gradh[0]+fn.math.sin(X)).evaluate(mesh))
+print("dhdY (error) = ",  gradh[1].evaluate(mesh))
+
 
 # +
 import lavavu
@@ -227,8 +327,7 @@ tris.vertices(xyz)
 tris.indices(mesh.tri.simplices)
 tris.values(height.data, label="height")
 tris.values(slope.evaluate(mesh), label="slope")
-tris.values(curl_grad_h.evaluate(mesh), label="curlgrad")
-tris.values(grady.evaluate(mesh), label="dh/dy")
+tris.values(gradh[1].evaluate(mesh), label="dh/dy")
 
 tris.colourmap("elevation")
 cb = tris.colourbar()
@@ -238,7 +337,7 @@ lv.control.Range('specular', range=(0,1), step=0.1, value=0.4)
 lv.control.Checkbox(property='axis')
 lv.control.ObjectList()
 tris.control.Checkbox(property="wireframe")
-tris.control.List(options=["height", "slope", "curlgrad", "dh/dy"], property="colourby", value="slope", command="redraw", label="Display:")
+tris.control.List(options=["height", "slope", "dh/dy"], property="colourby", value="slope", command="redraw", label="Display:")
 lv.control.show()
 # -
 
@@ -254,13 +353,13 @@ lv.control.show()
 # The mesh has a mesh.mask variable that is used to identify boundary points. Others could be added (by you) to identify regions such as internal drainages that require special treatment or exclusion from some equations. The levelset function can be applied to a mask to ensure that interpolation does not produce anomalies. It could also be used to clip out a value in a field between certain ranges (e.g. to capture regions in a specific height interval or with a specific catchment identifier). 
 #
 
-masked_height = fn.misc.where(fn.misc.coord(1), height, 0.0)
+masked_height = fn.misc.where(Y, height, 0.0)
 masked_height.display()
 masked_height.derivative(1)
 print(masked_height)
 
-flat_area_mask  = fn.misc.where(0.1-slope, 1.0, 0.0 )
-steep_area_mask = fn.misc.where(slope-0.9, 1.0, 0.0 )
+flat_area_mask  = fn.misc.where(0.2-slope, 1.0, 0.0 ) 
+steep_area_mask = fn.misc.where(slope-0.8, 1.0, 0.0 )
 flat_area_mask.display()
 steep_area_mask.display()
 
@@ -296,3 +395,5 @@ lv.control.show()
 
 
 masked_height.derivative(1)
+
+

@@ -49,8 +49,8 @@ mesh = QuagMesh(DM, downhill_neighbours=1)
 # names are not corrupted due to unexpected special characters. 
 
 # +
-phi = mesh.add_variable(name="PHI(X,Y)")
-psi = mesh.add_variable(name="PSI(X,Y)")
+phi = mesh.add_variable(name="PHI(X,Y)", lname=r"\phi")
+psi = mesh.add_variable(name="PSI(X,Y)", lname=r"\psi")
 
 # is equivalent to
 
@@ -58,12 +58,19 @@ phi1 = MeshVariable(name="PSI(X,Y)", mesh=mesh)
 psi1 = MeshVariable(name="PHI(X,Y)", mesh=mesh)
 
 print(psi)
+# -
+
+
+
+
+
+3=1
 
 # +
 ## latex / jupyter additions:
 
 phi = mesh.add_variable(name="PHI(X,Y)", lname=r"\phi")
-psi = mesh.add_variable(name="PHI(X,Y)", lname=r"\psi")
+psi = mesh.add_variable(name="PSI(X,Y)", lname=r"\psi")
 
 print("Printed version:")
 print(phi)
@@ -162,6 +169,8 @@ phi.sync(mergeShadow=True) # this will add the values from each processor in par
 print(phi.data)
 print(phi.evaluate(mesh))
 print(phi.evaluate(phi._mesh)) 
+print(phi.evaluate()) 
+
 
 ## interpolation at a point 
 
@@ -172,17 +181,16 @@ print(phi.evaluate((0.01, 1.0)))
 
 # ## Derivatives / gradients
 #
-# Mesh based variables can be differentiated in (X,Y). There is a `gradient` method that supplies the coefficients of the derivative surface at the nodal points (these may then need to be interpolated). A more general interface is also provided in the form of a function which can be evaluated (as above):
-#
+# Mesh based variables can be differentiated in (X,Y). There is a `_gradient` method inherited from the `stripy` package that supplies the coefficients of the derivative surface at the nodal points (these may then need to be interpolated). A more general interface is also provided in the form of functions which not only compute the gradient but also handle interpolation between meshes and are also evaluated on demand (i.e. can be composed into functions).
 
 # +
-dpsi = psi.gradient()
+dpsi = psi._gradient()
 dpsidx_nodes = dpsi[:,0]
 dpsidy_nodes = dpsi[:,1]
 print("dPSIdx - N: ",  dpsidx_nodes)
 print("dPSIdy - N: ",  dpsidy_nodes)
 
-dpsidx_fn = psi.fn_gradient(0)# (0) for X derivative, (1) for Y
+dpsidx_fn = psi.fn_gradient(0) # (0) for X derivative, (1) for Y
 print("dPSIdx - F: ",  dpsidx_fn.evaluate(mesh))
 print("dPSIdx - point evaluation ",  dpsidx_fn.evaluate((0.01, 1.0)))
 # -
@@ -204,7 +212,7 @@ dpsidy_var = mesh.add_variable("dpsidy")
 dpsidy_var.data = dpsidy_nodes
 
 
-print( dpsidx_var.gradient()[:,0] )
+print( dpsidx_var._gradient()[:,0] )
 
 
 ## And this way is function based (two equivalent interfaces)
@@ -227,7 +235,7 @@ print( d2psidx2_fn2.evaluate(mesh))
 
 psi.data = 2.0 * np.cos(mesh.coords[:,0])**2.0 * np.sin(mesh.coords[:,1])**2.0 
 
-print( dpsidx_var.gradient()[:,0] )
+print( dpsidx_var._gradient()[:,0] )
 print(  0.5 * d2psidx2_fn.evaluate(mesh) )
 print( (0.5 * d2psidx2_fn).evaluate(mesh))
 # -
@@ -240,10 +248,10 @@ print( (0.5 * d2psidx2_fn).evaluate(mesh))
 # with very little overhead because the interface is very lightweight.
 
 # +
-laplace_phi = phi.derivative(0).derivative(0) + phi.derivative(1).derivative(1)
-print(laplace_phi)
+laplace_phi_xy = phi.derivative(0).derivative(0) + phi.derivative(1).derivative(1)
+print(laplace_phi_xy)
 
-print(laplace_phi.evaluate(mesh))
+print(laplace_phi_xy.evaluate(mesh))
 # -
 
 # ### Visualisation
@@ -284,8 +292,9 @@ lv.control.show()
 
 
 mesh.save_mesh_to_hdf5("Ex1a-circular_mesh.h5")
-phi.save("Ex1a-circular_mesh_phi.h5")
 psi.save("Ex1a-circular_mesh_psi.h5")
+phi.save("Ex1a-circular_mesh_phi.h5")
+
 
 # We can then use these files to:
 #   - Build a new copy of the mesh
@@ -298,12 +307,14 @@ psi.save("Ex1a-circular_mesh_psi.h5")
 DM2 = meshtools.create_DMPlex_from_hdf5("Ex1a-circular_mesh.h5")
 mesh2 = QuagMesh(DM2)
 
+print(mesh.npoints, mesh2.npoints)
+
 phi2 = mesh2.add_variable(name="PHI(X,Y)")
 psi2 = mesh2.add_variable(name="PSI(X,Y)")
 
-
-phi2.load("Ex1a-circular_mesh_phi.h5")
 psi2.load("Ex1a-circular_mesh_psi.h5")
+phi2.load("Ex1a-circular_mesh_phi.h5")
+
 # -
 
 # ### Mesh variable save / load and names
@@ -328,5 +339,9 @@ psi3.load("Ex1a-circular_mesh_psi.h5", name="PSI(X,Y)")
 psi3.data
 
 print(phi.data[0], psi.data[0])
+
+
+
+
 
 
