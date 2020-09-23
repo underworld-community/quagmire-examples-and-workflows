@@ -6,7 +6,7 @@
 #       extension: .py
 #       format_name: light
 #       format_version: '1.5'
-#       jupytext_version: 1.4.2
+#       jupytext_version: 1.5.0
 #   kernelspec:
 #     display_name: Python 3
 #     language: python
@@ -23,6 +23,7 @@ from quagmire import tools as meshtools
 from quagmire import function as fn
 from quagmire import equation_systems as systems
 import quagmire
+import stripy
 import numpy as np
 import matplotlib.pyplot as plt
 from time import time
@@ -40,8 +41,9 @@ minX, maxX = -5.0, 5.0
 minY, maxY = -5.0, 5.0,
 dx, dy = 0.05, 0.05
 
-x1, y1, simplices = meshtools.elliptical_mesh(minX, maxX, minY, maxY, dx, dy, random_scale=0.0, refinement_levels=1)
-DM = meshtools.create_DMPlex(x1, y1, simplices, boundary_vertices=None)
+# x1, y1, simplices = meshtools.elliptical_mesh(minX, maxX, minY, maxY, dx, dy, random_scale=0.0, refinement_levels=1)
+x1, y1, bmask = stripy.cartesian_meshes.elliptical_base_mesh_points(5.0, 5.0, 0.05)
+DM = meshtools.create_DMPlex_from_points(x1, y1, bmask)
 mesh = QuagMesh(DM, verbose=False, tree=True)
 
 print( "\nNumber of points in the triangulation: {}".format(mesh.npoints))
@@ -50,7 +52,7 @@ print( "Downhill neighbour paths: {}".format(mesh.downhill_neighbours))
 # +
 x = mesh.coords[:,0]
 y = mesh.coords[:,1]
-boundary_mask_fn = fn.misc.levelset(mesh.mask, 0.5)
+boundary_mask_fn = fn.misc.where(mesh.mask, 1, 0)
 
 radius  = np.sqrt((x**2 + y**2))
 theta   = np.arctan2(y,x) + 0.1
@@ -64,7 +66,10 @@ with mesh.deform_topography():
     mesh.topography.data = height
 
 rainfall_fn = mesh.topography ** 2.0
+# -
 
+
+mesh.topography.slope()
 
 # +
 # vary these and visualise difference
@@ -74,7 +79,7 @@ K = fn.parameter(1.0)
 
 # create stream power function
 upstream_precipitation_integral_fn = mesh.upstream_integral_fn(rainfall_fn)
-stream_power_fn = K*upstream_precipitation_integral_fn**m * mesh.slope**n * boundary_mask_fn
+stream_power_fn = K*upstream_precipitation_integral_fn**m * mesh.topography.slope()**n * boundary_mask_fn
 
 # evaluate on the mesh
 sp = stream_power_fn.evaluate(mesh)
@@ -105,8 +110,8 @@ import quagmire.equation_systems as systems
 ## Set up diffusion solver
 
 diffusion_solver = systems.DiffusionEquation(mesh=mesh)
-diffusion_solver.neumann_x_mask = fn.misc.levelset(mesh.mask, invert=True)
-diffusion_solver.neumann_y_mask = fn.misc.levelset(mesh.mask, invert=True)
+diffusion_solver.neumann_x_mask = fn.misc.where(mesh.mask, 0, 1)
+diffusion_solver.neumann_y_mask = fn.misc.where(mesh.mask, 0, 1)
 diffusion_solver.dirichlet_mask = fn.parameter(0.0)
 diffusion_solver.diffusivity = fn.parameter(1.0)
 diffusion_solver.verify() # Does nothing but is supposed to check we have everything necessary
@@ -256,6 +261,4 @@ fig.colorbar(im2, ax=ax2)
 fig.colorbar(im3, ax=ax3)
 plt.show()
 # -
-
-
 
